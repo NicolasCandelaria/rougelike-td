@@ -2,5 +2,8 @@ Audio: Kenney sound packs, all CC0 1.0 Universal.
 - Sci-Fi Sounds (kenney.nl) - shoot/impact/explosion sounds
 - Interface Sounds (kenney.nl) - UI, place, sell, leak, coin sounds
 - Digital Audio / 63 Digital SFX (kenney.nl) - victory and defeat stings
-- Music Jingles (kenney.nl) - background music (music_steel_*.ogg)
+- Music Loops (kenney.nl) - background music (music_*.ogg)
+  Menu: Swinging Pants | Meadow: Farm Frolics | Canyon: Flowing Rocks
+  Crossroads: Mishief Stroll | Fracture: Drumming Sticks | Siege: Mission Plausible
+  Citadel: Infinite Descent
 Attribution not required. Credit "Kenney.nl" appreciated.

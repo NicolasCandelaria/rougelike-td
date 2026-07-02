@@ -5,61 +5,61 @@ extends Node
 
 const SAVE_PATH := "user://meta.json"
 
-const CORES_PER_WAVE := 6
-const KILLS_PER_CORE := 4      # 1 core per 4 kills
-const VICTORY_BONUS := 75
+const CORES_PER_WAVE := 2
+const KILLS_PER_CORE := 10     # 1 core per 10 kills
+const VICTORY_BONUS := 25
 
 ## Upgrade table. "amount" is the per-level effect consumed by game.gd.
 ## max = 1 entries are one-time unlocks.
 const UPGRADES := {
 	"start_gold": {
 		name = "War Funding", amount = 25.0, max = 4,
-		costs = [30, 60, 100, 150],
+		costs = [55, 110, 185, 280],
 		desc = "+25 starting gold per level.",
 	},
 	"base_hp": {
 		name = "Fortifications", amount = 20.0, max = 4,
-		costs = [30, 60, 100, 150],
+		costs = [55, 110, 185, 280],
 		desc = "+20 starting base HP per level.",
 	},
 	"damage": {
 		name = "Weapons Lab", amount = 0.05, max = 5,
-		costs = [50, 90, 140, 200, 280],
+		costs = [90, 160, 250, 360, 500],
 		desc = "All towers +5% damage per level.",
 	},
 	"rate": {
 		name = "Rapid Loaders", amount = 0.04, max = 5,
-		costs = [50, 90, 140, 200, 280],
+		costs = [90, 160, 250, 360, 500],
 		desc = "All towers +4% fire rate per level.",
 	},
 	"bounty": {
 		name = "Bounty Office", amount = 0.06, max = 4,
-		costs = [40, 80, 130, 190],
+		costs = [70, 140, 230, 340],
 		desc = "+6% gold from kills per level.",
 	},
 	"core_gain": {
 		name = "Salvage Rig", amount = 0.10, max = 5,
-		costs = [40, 70, 110, 160, 220],
+		costs = [80, 150, 240, 350, 480],
 		desc = "+10% Cores earned from runs per level.",
 	},
 	"unlock_cannon": {
 		name = "Cannon Blueprint", amount = 0.0, max = 1,
-		costs = [120],
+		costs = [220],
 		desc = "Start every run with the Cannon unlocked.",
 	},
 	"unlock_frost": {
 		name = "Frost Blueprint", amount = 0.0, max = 1,
-		costs = [160],
+		costs = [320],
 		desc = "Start every run with the Frost tower unlocked.",
 	},
 	"unlock_sniper": {
 		name = "Sniper Blueprint", amount = 0.0, max = 1,
-		costs = [220],
+		costs = [450],
 		desc = "Start every run with the Sniper unlocked.",
 	},
 	"start_relic": {
 		name = "Relic Cache", amount = 0.0, max = 1,
-		costs = [300],
+		costs = [550],
 		desc = "Start every run with a random relic.",
 	},
 }

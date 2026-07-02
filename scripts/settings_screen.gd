@@ -8,6 +8,7 @@ var _fullscreen_check: CheckBox
 func _ready() -> void:
 	_settings = SaveData.load_settings()
 	SaveData.apply_to_sfx(get_node("/root/GameSfx"))
+	get_node("/root/GameSfx").play_music(Sfx.MUSIC_MENU)
 	_build_ui()
 
 func _build_ui() -> void:

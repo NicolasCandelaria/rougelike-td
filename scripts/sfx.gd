@@ -2,7 +2,7 @@ class_name Sfx
 extends Node
 ## Pooled sound playback with per-sound volume, pitch jitter, and throttling.
 ## Throttle stops rapid-fire sources (six gatlings) from stacking into noise.
-## Also owns the background music player (shuffled playlist of Kenney loops).
+## Also owns the background music player (per-map loops + menu theme).
 
 const SOUNDS := {
 	"shoot_gatling": {path = "res://assets/audio/shoot_gatling.ogg", vol = -14.0, jitter = 0.12, throttle = 70},
@@ -24,15 +24,18 @@ const SOUNDS := {
 
 const POOL_SIZE := 14
 
-## Short CC0 steel-drum tracks from Kenney's Music Jingles pack,
-## rotated as a playlist so the loop doesn't get repetitive.
-const MUSIC_TRACKS := [
-	"res://assets/audio/music_steel_1.ogg",
-	"res://assets/audio/music_steel_2.ogg",
-	"res://assets/audio/music_steel_3.ogg",
-	"res://assets/audio/music_steel_4.ogg",
-]
-const MUSIC_BASE_DB := -16.0   # keep music well under the SFX
+## Background music: one loop per map plus a dedicated menu theme.
+## Tracks are CC0 loops from Kenney's Music Loops pack (kenney.nl).
+const MUSIC_MENU := "res://assets/audio/music_menu.ogg"
+const MUSIC_BY_MAP := {
+	"meadow": "res://assets/audio/music_meadow.ogg",
+	"canyon": "res://assets/audio/music_canyon.ogg",
+	"crossroads": "res://assets/audio/music_crossroads.ogg",
+	"fracture": "res://assets/audio/music_fracture.ogg",
+	"siege": "res://assets/audio/music_siege.ogg",
+	"citadel": "res://assets/audio/music_citadel.ogg",
+}
+const MUSIC_BASE_DB := -14.0   # keep music under the SFX
 
 var muted := false
 var sfx_volume := 1.0          # linear 0..1, user-set via the sound menu
@@ -41,7 +44,7 @@ var _streams := {}
 var _players: Array[AudioStreamPlayer] = []
 var _last_played := {}        # name -> msec of last playback
 var _music_player: AudioStreamPlayer
-var _music_index := 0
+var _current_music_path := ""
 
 func _ready() -> void:
 	for key in SOUNDS.keys():
@@ -52,10 +55,8 @@ func _ready() -> void:
 		_players.append(p)
 
 	_music_player = AudioStreamPlayer.new()
-	_music_player.finished.connect(_play_next_track)
 	add_child(_music_player)
-	_music_index = randi() % MUSIC_TRACKS.size()
-	_play_next_track()
+	play_music(MUSIC_MENU)
 
 func play(sound: String) -> void:
 	if muted or sfx_volume <= 0.01 or not _streams.has(sound):
@@ -76,12 +77,32 @@ func play(sound: String) -> void:
 	player.play()
 
 ## ---------- Music ----------
-func _play_next_track() -> void:
-	_music_index = (_music_index + 1) % MUSIC_TRACKS.size()
-	_music_player.stream = load(MUSIC_TRACKS[_music_index])
+## Switch to a looping track. No-op if already playing the same file.
+func play_music(path: String) -> void:
+	if path.is_empty() or (path == _current_music_path and _music_player.playing):
+		return
+	_current_music_path = path
+	var raw: AudioStream = load(path)
+	if raw == null:
+		push_warning("Missing music: %s" % path)
+		return
+	var stream := raw.duplicate() as AudioStream
+	if stream is AudioStreamOggVorbis:
+		stream.loop = true
+	elif stream is AudioStreamMP3:
+		stream.loop = true
+	_music_player.stop()
+	_music_player.stream = stream
 	_music_player.volume_db = _music_db()
-	_music_player.play()
+	if not muted and music_volume > 0.01:
+		_music_player.play()
 	_music_player.stream_paused = muted
+
+func play_map_music(map_id: String) -> void:
+	var path: String = MUSIC_BY_MAP.get(map_id, "")
+	if path.is_empty():
+		return
+	play_music(path)
 
 func _music_db() -> float:
 	if music_volume <= 0.01:
@@ -107,4 +128,8 @@ func set_muted(m: bool) -> void:
 	if m:
 		for p in _players:
 			p.stop()
-	_music_player.stream_paused = m
+		_music_player.stream_paused = true
+	else:
+		_music_player.stream_paused = false
+		if not _music_player.playing and _current_music_path != "" and music_volume > 0.01:
+			_music_player.play()

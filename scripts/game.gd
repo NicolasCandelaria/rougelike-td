@@ -53,6 +53,7 @@ var _smoke_timer := 0.0
 var _hit_stop_active := false
 var _cores_awarded := false
 var last_core_gain := 0
+var _meta_bounty_mult := 1.0   # set once by _apply_meta_upgrades
 
 func _ready() -> void:
 	_smoke = OS.get_environment("TD_SMOKE") == "1"
@@ -84,6 +85,7 @@ func _ready() -> void:
 
 	sfx = get_node("/root/GameSfx")
 	_apply_saved_settings()
+	sfx.play_map_music(GameData.map_by_index(map_index).id)
 
 	wave_mgr = WaveManager.new()
 	wave_mgr.spawn_enemy.connect(_on_spawn_enemy)
@@ -134,6 +136,7 @@ func _ready() -> void:
 ## ---------- Meta progression ----------
 ## Applied once at run start; levels come from the persistent Upgrades menu.
 func _apply_meta_upgrades() -> void:
+	_meta_bounty_mult = 1.0 + Meta.total("bounty")
 	currency += int(Meta.total("start_gold"))
 	base_hp_max += int(Meta.total("base_hp"))
 	base_hp = base_hp_max
@@ -239,8 +242,7 @@ func _on_enemy_died(e: Enemy) -> void:
 	kills += 1
 	kill_counter += 1
 	sfx.play("enemy_die")
-	var gain := e.bounty
-	gain = int(round(gain * (1.0 + Meta.total("bounty"))))
+	var gain := int(round(e.bounty * _meta_bounty_mult))
 	if "lucky" in relics and randf() < 0.10:
 		gain += 5
 		spawn_coin(e.global_position)

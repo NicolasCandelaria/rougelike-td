@@ -289,12 +289,101 @@ func refresh() -> void:
 		_start_button.text = "Start Wave %d" % next_wave
 		_preview_label.text = _wave_preview_text(next_wave)
 	_mute_button.text = "Mute" if game.sfx.muted else "Snd"
-	_relic_label.text = ("Relics: " + ", ".join(game.relics.map(
-		func(id: String) -> String: return GameData.RELICS[id].title))) if game.relics.size() > 0 else ""
+	var relic_parts: Array[String] = []
+	if game.relics.size() > 0:
+		relic_parts.append("Relics: " + ", ".join(game.relics.map(
+			func(id: String) -> String: return GameData.RELICS[id].title)))
+	if game.curses.size() > 0:
+		relic_parts.append("Curses: " + ", ".join(game.curses.map(
+			func(id: String) -> String: return GameData.CURSES[id].title)))
+	_relic_label.text = "   ".join(relic_parts)
 	_hint_label.text = "1-4 pick tower, click grass to place. Right-click cancels. Space starts." \
 		if game.state == game.State.BUILD or game.placing_type != "" else ""
 
 ## ---------- Reward overlay ----------
+## Per-kind card flavor: accent color drives the frame, tag, and title.
+const CARD_STYLES := {
+	tower = {tag = "TOWER", accent = Color(0.45, 0.75, 1.0), bg = Color(0.09, 0.13, 0.19)},
+	upgrade = {tag = "UPGRADE", accent = Color(1.0, 0.65, 0.25), bg = Color(0.16, 0.12, 0.08)},
+	relic = {tag = "RELIC", accent = Color(1.0, 0.85, 0.35), bg = Color(0.15, 0.13, 0.07)},
+	gold = {tag = "GOLD", accent = Color(1.0, 0.9, 0.4), bg = Color(0.14, 0.12, 0.06)},
+	curse = {tag = "CURSE", accent = Color(0.8, 0.4, 1.0), bg = Color(0.12, 0.06, 0.17)},
+}
+
+func _card_icon_path(card: Dictionary) -> String:
+	match card.kind:
+		"tower": return GameData.TOWERS[card.id].gun_tex
+		"upgrade": return GameData.UPGRADE_KINDS[card.stat].icon
+		"relic": return GameData.RELICS[card.id].icon
+		"curse": return GameData.CURSES[card.id].icon
+		"gold": return GameData.GOLD_ICON
+	return ""
+
+func _card_stylebox(bg: Color, accent: Color, border_alpha: float) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = Color(accent, border_alpha)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(10)
+	sb.set_content_margin_all(12)
+	return sb
+
+func _make_reward_card(card: Dictionary, index: int) -> Button:
+	var style: Dictionary = CARD_STYLES[card.kind]
+	var accent: Color = style.accent
+	var bg: Color = style.bg
+
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(260, 250)
+	b.add_theme_stylebox_override("normal", _card_stylebox(bg, accent, 0.55))
+	b.add_theme_stylebox_override("hover", _card_stylebox(bg.lightened(0.06), accent, 1.0))
+	b.add_theme_stylebox_override("pressed", _card_stylebox(bg.darkened(0.15), accent, 1.0))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.pressed.connect(func() -> void: reward_chosen.emit(index))
+
+	# Content lives in a mouse-transparent VBox so the whole card stays
+	# one clickable button while allowing per-label colors and an icon.
+	var col := VBoxContainer.new()
+	col.set_anchors_preset(Control.PRESET_FULL_RECT)
+	col.set_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 12)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_theme_constant_override("separation", 8)
+	b.add_child(col)
+
+	var tag := Label.new()
+	tag.text = style.tag
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.add_theme_font_size_override("font_size", 13)
+	tag.add_theme_color_override("font_color", accent)
+	col.add_child(tag)
+
+	var icon_path := _card_icon_path(card)
+	if icon_path != "":
+		var icon := TextureRect.new()
+		icon.texture = load(icon_path)
+		icon.custom_minimum_size = Vector2(0, 72)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(icon)
+
+	var title := Label.new()
+	title.text = card.title
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.add_theme_font_size_override("font_size", 18)
+	title.add_theme_color_override("font_color", accent.lightened(0.35))
+	col.add_child(title)
+
+	var desc := Label.new()
+	desc.text = card.desc
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.add_theme_font_size_override("font_size", 14)
+	desc.add_theme_color_override("font_color", Color(1, 1, 1, 0.82))
+	col.add_child(desc)
+	return b
+
 func show_rewards(cards: Array) -> void:
 	_reward_overlay = _dim_overlay()
 	var center := CenterContainer.new()
@@ -316,23 +405,7 @@ func show_rewards(cards: Array) -> void:
 	col.add_child(row)
 
 	for i in range(cards.size()):
-		var card: Dictionary = cards[i]
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(260, 190)
-		var tag: String = {tower = "[ TOWER ]", upgrade = "[ UPGRADE ]",
-			relic = "[ RELIC ]", gold = "[ GOLD ]"}[card.kind]
-		b.text = "%s\n%s\n\n%s" % [tag, card.title, card.desc]
-		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		b.clip_text = false
-		if card.kind == "tower":
-			b.icon = load(GameData.TOWERS[card.id].gun_tex)
-			b.expand_icon = true
-			b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-			b.add_theme_constant_override("icon_max_width", 48)
-		var idx := i
-		b.pressed.connect(func() -> void: reward_chosen.emit(idx))
-		row.add_child(b)
+		row.add_child(_make_reward_card(cards[i], i))
 
 func hide_rewards() -> void:
 	if is_instance_valid(_reward_overlay):

@@ -3,6 +3,7 @@ extends Control
 
 func _ready() -> void:
 	SaveData.apply_to_sfx(get_node("/root/GameSfx"))
+	get_node("/root/GameSfx").play_music(Sfx.MUSIC_MENU)
 	_build_ui()
 
 func _build_ui() -> void:
