@@ -27,6 +27,11 @@ Audio: Kenney Sci-Fi Sounds, Interface Sounds, and Digital Audio packs, CC0. See
 - 20 hand-authored waves, win at wave 20, optional endless mode after victory with procedurally generated waves.
 - 12 relics plus per-tower damage/rate/range upgrade cards. Card weighting favors tower unlocks early, upgrades and relics late.
 
+## v1.3 additions
+- Background music: rotating playlist of Kenney Music Jingles steel-drum tracks, mixed quiet under the SFX
+- Volume menu (Vol button) with separate SFX and music sliders
+- Tower unlock reward cards now show the tower's sprite
+
 ## v1.2 additions
 - Full sound pass: per-tower shot sounds, splash impacts, enemy deaths, base-damage alarm, tower place/sell, reward pick, wave start, coin drops, victory/defeat stings
 - SFX system (`scripts/sfx.gd`) with a pooled player set, per-sound volume tuning, random pitch jitter, and per-sound throttling so rapid-fire towers don't stack into noise

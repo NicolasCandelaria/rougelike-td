@@ -26,6 +26,7 @@ var _speed_button: Button
 var _mute_button: Button
 var _tower_panel: PanelContainer
 var _tower_panel_label: Label
+var _sound_menu: PanelContainer
 
 const BAR_Y := 640.0
 const BAR_H := 80.0
@@ -91,32 +92,43 @@ func _build_bottom_bar() -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
 
-	_hint_label = _mk_label(row, "")
+	# Hint lives above the bar, not inside it: the bar has no horizontal
+	# room left once all buttons are visible.
+	_hint_label = Label.new()
+	_hint_label.position = Vector2(8, BAR_Y - 24)
 	_hint_label.add_theme_font_size_override("font_size", 14)
 	_hint_label.modulate = Color(1, 1, 1, 0.7)
+	add_child(_hint_label)
 
 	_preview_label = _mk_label(row, "")
 	_preview_label.add_theme_font_size_override("font_size", 14)
 
 	_mute_button = Button.new()
 	_mute_button.text = "Snd"
-	_mute_button.custom_minimum_size = Vector2(64, 64)
+	_mute_button.custom_minimum_size = Vector2(56, 64)
 	_mute_button.tooltip_text = "Toggle sound (M)"
 	_mute_button.pressed.connect(func() -> void:
 		game.sfx.set_muted(not game.sfx.muted)
 		refresh())
 	row.add_child(_mute_button)
 
+	var vol_button := Button.new()
+	vol_button.text = "Vol"
+	vol_button.custom_minimum_size = Vector2(56, 64)
+	vol_button.tooltip_text = "Sound volume settings"
+	vol_button.pressed.connect(_toggle_sound_menu)
+	row.add_child(vol_button)
+
 	_speed_button = Button.new()
 	_speed_button.text = "1x"
-	_speed_button.custom_minimum_size = Vector2(64, 64)
+	_speed_button.custom_minimum_size = Vector2(56, 64)
 	_speed_button.tooltip_text = "Game speed"
 	_speed_button.pressed.connect(_cycle_speed)
 	row.add_child(_speed_button)
 
 	_start_button = Button.new()
 	_start_button.text = "Start Wave"
-	_start_button.custom_minimum_size = Vector2(180, 64)
+	_start_button.custom_minimum_size = Vector2(170, 64)
 	_start_button.tooltip_text = "Hotkey: Space"
 	_start_button.pressed.connect(func() -> void: start_wave_pressed.emit())
 	row.add_child(_start_button)
@@ -149,6 +161,59 @@ func _build_tower_panel() -> void:
 	sell.text = "Sell (70% refund)"
 	sell.pressed.connect(func() -> void: sell_pressed.emit())
 	col.add_child(sell)
+
+## ---------- Sound menu ----------
+func _toggle_sound_menu() -> void:
+	game.sfx.play("ui_click")
+	if _sound_menu == null:
+		_build_sound_menu()
+	_sound_menu.visible = not _sound_menu.visible
+
+func _build_sound_menu() -> void:
+	_sound_menu = PanelContainer.new()
+	_sound_menu.position = Vector2(940, 470)
+	_sound_menu.custom_minimum_size = Vector2(300, 0)
+	add_child(_sound_menu)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	_sound_menu.add_child(col)
+
+	var title := Label.new()
+	title.text = "Sound Volume"
+	title.add_theme_font_size_override("font_size", 17)
+	col.add_child(title)
+
+	_mk_volume_row(col, "SFX", game.sfx.sfx_volume,
+		func(v: float) -> void:
+			game.sfx.set_sfx_volume(v)
+			game.sfx.play("ui_click"))
+	_mk_volume_row(col, "Music", game.sfx.music_volume,
+		func(v: float) -> void: game.sfx.set_music_volume(v))
+
+	var close := Button.new()
+	close.text = "Close"
+	close.pressed.connect(func() -> void: _sound_menu.visible = false)
+	col.add_child(close)
+
+func _mk_volume_row(parent: Node, label_text: String, initial: float, on_change: Callable) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	parent.add_child(row)
+	var l := Label.new()
+	l.text = label_text
+	l.custom_minimum_size = Vector2(52, 0)
+	l.add_theme_font_size_override("font_size", 15)
+	row.add_child(l)
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.05
+	slider.value = initial
+	slider.custom_minimum_size = Vector2(180, 22)
+	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	slider.value_changed.connect(on_change)
+	row.add_child(slider)
 
 func show_tower_panel(t: Tower) -> void:
 	var d: Dictionary = GameData.TOWERS[t.type_id]
@@ -229,12 +294,18 @@ func show_rewards(cards: Array) -> void:
 	for i in range(cards.size()):
 		var card: Dictionary = cards[i]
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(260, 160)
+		b.custom_minimum_size = Vector2(260, 190)
 		var tag: String = {tower = "[ TOWER ]", upgrade = "[ UPGRADE ]",
 			relic = "[ RELIC ]", gold = "[ GOLD ]"}[card.kind]
 		b.text = "%s\n%s\n\n%s" % [tag, card.title, card.desc]
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.clip_text = false
+		if card.kind == "tower":
+			b.icon = load(GameData.TOWERS[card.id].gun_tex)
+			b.expand_icon = true
+			b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+			b.add_theme_constant_override("icon_max_width", 48)
 		var idx := i
 		b.pressed.connect(func() -> void: reward_chosen.emit(idx))
 		row.add_child(b)

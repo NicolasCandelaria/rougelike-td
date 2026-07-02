@@ -2,4 +2,5 @@ Audio: Kenney sound packs, all CC0 1.0 Universal.
 - Sci-Fi Sounds (kenney.nl) - shoot/impact/explosion sounds
 - Interface Sounds (kenney.nl) - UI, place, sell, leak, coin sounds
 - Digital Audio / 63 Digital SFX (kenney.nl) - victory and defeat stings
+- Music Jingles (kenney.nl) - background music (music_steel_*.ogg)
 Attribution not required. Credit "Kenney.nl" appreciated.
