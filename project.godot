@@ -4,8 +4,13 @@ config_version=5
 [application]
 
 config/name="TD Roguelike"
-run/main_scene="res://scenes/Main.tscn"
+run/main_scene="res://scenes/Menu.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
+
+[autoload]
+
+Meta="*res://scripts/meta.gd"
+GameSfx="*res://scripts/sfx.gd"
 
 [display]
 

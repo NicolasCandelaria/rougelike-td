@@ -25,9 +25,15 @@ func setup(id: String, game_ref: Node) -> void:
 	add_child(_gun)
 	z_index = 8
 
+	# Snap-in placement animation: drop from oversized to rest with overshoot.
+	scale = Vector2.ONE * 1.45
+	var tw := create_tween()
+	tw.tween_property(self, "scale", Vector2.ONE, 0.16) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 func stat_damage() -> float:
 	var d: Dictionary = GameData.TOWERS[type_id]
-	return d.damage * game.type_bonus[type_id].damage * game.global_damage
+	return d.damage * game.type_bonus[type_id].damage * game.global_damage * game.meta_endless_mult()
 
 func stat_rate() -> float:
 	var d: Dictionary = GameData.TOWERS[type_id]

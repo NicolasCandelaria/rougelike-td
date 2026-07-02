@@ -18,7 +18,7 @@ Audio: Kenney Sci-Fi Sounds, Interface Sounds, and Digital Audio packs, CC0. See
 - Right-click or Esc cancels placement and deselects.
 - Click a placed tower to see its live stats and range; sell for a 70% refund.
 - Space or the Start Wave button launches the next wave. You can keep placing towers mid-wave.
-- The Nx button cycles game speed (1x / 2x / 3x). The Snd button (or M) toggles sound.
+- The Nx button cycles game speed (1x / 2x / 4x). The Snd button (or M) toggles sound.
 - Between waves, pick one of three reward cards: new tower unlock, tower upgrade, or a run-wide relic.
 
 ## Content (v1)

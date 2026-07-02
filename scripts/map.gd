@@ -1,30 +1,27 @@
 class_name GameMap
 extends Node2D
-## Builds the tile visuals, owns the fixed enemy path and tower occupancy.
+## Builds tile visuals, owns enemy paths and tower occupancy for a selected map.
 
 const CELL := 64
 const GRID_W := 20
 const GRID_H := 10
 
-## Fixed path as grid corner points (col, row). Enemies walk segment to segment.
-const PATH_POINTS := [
-	Vector2i(0, 2), Vector2i(15, 2), Vector2i(15, 5),
-	Vector2i(3, 5), Vector2i(3, 8), Vector2i(19, 8),
-]
-
 var path_cells := {}          # Dictionary used as a set of Vector2i
 var occupied := {}            # Vector2i -> Tower
 var blocked := {}             # decorative cells, not buildable
-var waypoints: PackedVector2Array = []
+var waypoints_list: Array = []  # Array of PackedVector2Array, one per spawn path
+var base_cell := Vector2i.ZERO
 
-## Hand-placed decoration cells (rocks block building, adds placement texture).
-const DECO_CELLS := [
-	Vector2i(1, 0), Vector2i(5, 0), Vector2i(11, 1), Vector2i(18, 1),
-	Vector2i(1, 4), Vector2i(9, 4), Vector2i(17, 6), Vector2i(2, 6),
-	Vector2i(7, 9), Vector2i(14, 9),
-]
+var _map_data: Dictionary = {}
 
-func _ready() -> void:
+func setup(map_index: int) -> void:
+	_map_data = GameData.map_by_index(map_index)
+	for child in get_children():
+		child.queue_free()
+	path_cells.clear()
+	occupied.clear()
+	blocked.clear()
+	waypoints_list.clear()
 	_collect_path_cells()
 	_build_waypoints()
 	_build_tiles()
@@ -32,30 +29,37 @@ func _ready() -> void:
 	_place_base_sprite()
 
 func _collect_path_cells() -> void:
-	for i in range(PATH_POINTS.size() - 1):
-		var a: Vector2i = PATH_POINTS[i]
-		var b: Vector2i = PATH_POINTS[i + 1]
-		var step := (b - a).sign()
-		var c := a
-		path_cells[c] = true
-		while c != b:
-			c += step
+	for path_def in _map_data.paths:
+		var points: Array = path_def.points
+		for i in range(points.size() - 1):
+			var a: Vector2i = points[i]
+			var b: Vector2i = points[i + 1]
+			var step := (b - a).sign()
+			var c := a
 			path_cells[c] = true
+			while c != b:
+				c += step
+				path_cells[c] = true
+		base_cell = points[points.size() - 1]
 
 func _build_waypoints() -> void:
-	waypoints.clear()
-	# Start slightly off-screen so enemies walk in.
-	var first := cell_center(PATH_POINTS[0])
-	waypoints.append(first + Vector2(-CELL, 0))
-	for p in PATH_POINTS:
-		waypoints.append(cell_center(p))
+	waypoints_list.clear()
+	for path_def in _map_data.paths:
+		var points: Array = path_def.points
+		var offset: Vector2 = path_def.get("spawn_offset", Vector2(-CELL, 0))
+		var wps := PackedVector2Array()
+		var first := cell_center(points[0])
+		wps.append(first + offset)
+		for p in points:
+			wps.append(cell_center(p))
+		waypoints_list.append(wps)
 
 func _build_tiles() -> void:
 	var grass: Texture2D = load("res://assets/sprites/grass.png")
 	var grass2: Texture2D = load("res://assets/sprites/grass2.png")
 	var path_tex: Texture2D = load("res://assets/sprites/path.png")
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 1234
+	rng.seed = int(_map_data.get("deco_seed", 1234))
 	for y in range(GRID_H):
 		for x in range(GRID_W):
 			var cell := Vector2i(x, y)
@@ -74,8 +78,8 @@ func _build_decorations() -> void:
 		"res://assets/sprites/deco_tree.png",
 	]
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 42
-	for cell in DECO_CELLS:
+	rng.seed = int(_map_data.get("deco_seed", 42)) + 17
+	for cell in _map_data.get("deco_cells", []):
 		if path_cells.has(cell):
 			continue
 		blocked[cell] = true
@@ -89,7 +93,7 @@ func _build_decorations() -> void:
 func _place_base_sprite() -> void:
 	var s := Sprite2D.new()
 	s.texture = load("res://assets/sprites/base_hq.png")
-	s.position = cell_center(PATH_POINTS[PATH_POINTS.size() - 1])
+	s.position = cell_center(base_cell)
 	s.z_index = 5
 	add_child(s)
 
@@ -111,8 +115,7 @@ func is_buildable(cell: Vector2i) -> bool:
 		return false
 	if blocked.has(cell):
 		return false
-	# Keep the base cell clear of towers (it's on the path anyway, but be safe).
-	if cell == PATH_POINTS[PATH_POINTS.size() - 1]:
+	if cell == base_cell:
 		return false
 	return true
 
@@ -124,3 +127,12 @@ func release(cell: Vector2i) -> void:
 
 func tower_at(cell: Vector2i) -> Node:
 	return occupied.get(cell, null)
+
+func waypoints_for_spawn(spawn_idx: int) -> PackedVector2Array:
+	if waypoints_list.is_empty():
+		return PackedVector2Array()
+	return waypoints_list[clampi(spawn_idx, 0, waypoints_list.size() - 1)]
+
+## Backward-compatible single-path accessor.
+func get_waypoints() -> PackedVector2Array:
+	return waypoints_for_spawn(0)

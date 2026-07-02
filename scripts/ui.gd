@@ -7,10 +7,14 @@ signal reward_chosen(index: int)
 signal restart_pressed
 signal continue_pressed
 signal sell_pressed
+signal menu_pressed
+signal map_select_pressed
+signal upgrades_pressed
 
 var game: Node
 
 var _wave_label: Label
+var _map_label: Label
 var _enemy_label: Label
 var _gold_label: Label
 var _hp_bar: ProgressBar
@@ -45,6 +49,7 @@ func _build_hud() -> void:
 	row.add_theme_constant_override("separation", 24)
 	top.add_child(row)
 
+	_map_label = _mk_label(row, "")
 	_wave_label = _mk_label(row, "Wave 0 / %d" % GameData.WIN_WAVE)
 	_enemy_label = _mk_label(row, "Enemies: 0")
 	_gold_label = _mk_label(row, "Gold: 0")
@@ -102,6 +107,10 @@ func _build_bottom_bar() -> void:
 
 	_preview_label = _mk_label(row, "")
 	_preview_label.add_theme_font_size_override("font_size", 14)
+	# Fixed width + clip so long previews can't push the right-side
+	# buttons (speed / start) off the edge of the screen.
+	_preview_label.clip_text = true
+	_preview_label.custom_minimum_size = Vector2(220, 0)
 
 	_mute_button = Button.new()
 	_mute_button.text = "Snd"
@@ -109,6 +118,7 @@ func _build_bottom_bar() -> void:
 	_mute_button.tooltip_text = "Toggle sound (M)"
 	_mute_button.pressed.connect(func() -> void:
 		game.sfx.set_muted(not game.sfx.muted)
+		SaveData.sync_from_sfx(game.sfx)
 		refresh())
 	row.add_child(_mute_button)
 
@@ -126,12 +136,21 @@ func _build_bottom_bar() -> void:
 	_speed_button.pressed.connect(_cycle_speed)
 	row.add_child(_speed_button)
 
+	# Reserve room at the end of the row for the anchored start button below.
+	var start_gap := Control.new()
+	start_gap.custom_minimum_size = Vector2(178, 0)
+	row.add_child(start_gap)
+
+	# The start button is anchored to the bottom-right corner of the screen
+	# (not inside the row) so it can never be pushed off-screen by the
+	# other bar contents.
 	_start_button = Button.new()
 	_start_button.text = "Start Wave"
 	_start_button.custom_minimum_size = Vector2(170, 64)
+	_start_button.position = Vector2(1280 - 178, BAR_Y + 8)
 	_start_button.tooltip_text = "Hotkey: Space"
 	_start_button.pressed.connect(func() -> void: start_wave_pressed.emit())
-	row.add_child(_start_button)
+	add_child(_start_button)
 
 func _mk_label(parent: Node, text: String) -> Label:
 	var l := Label.new()
@@ -142,7 +161,7 @@ func _mk_label(parent: Node, text: String) -> Label:
 
 func _cycle_speed() -> void:
 	game.sfx.play("ui_click")
-	var next: float = {1.0: 2.0, 2.0: 3.0, 3.0: 1.0}[game.game_speed]
+	var next: float = {1.0: 2.0, 2.0: 4.0, 4.0: 1.0}[game.game_speed]
 	game.set_game_speed(next)
 	_speed_button.text = "%dx" % int(next)
 
@@ -187,9 +206,12 @@ func _build_sound_menu() -> void:
 	_mk_volume_row(col, "SFX", game.sfx.sfx_volume,
 		func(v: float) -> void:
 			game.sfx.set_sfx_volume(v)
+			SaveData.sync_from_sfx(game.sfx)
 			game.sfx.play("ui_click"))
 	_mk_volume_row(col, "Music", game.sfx.music_volume,
-		func(v: float) -> void: game.sfx.set_music_volume(v))
+		func(v: float) -> void:
+			game.sfx.set_music_volume(v)
+			SaveData.sync_from_sfx(game.sfx))
 
 	var close := Button.new()
 	close.text = "Close"
@@ -226,7 +248,7 @@ func hide_tower_panel() -> void:
 
 func _wave_preview_text(wave: int) -> String:
 	var counts := {}
-	for g in GameData.wave_groups(wave):
+	for g in GameData.wave_groups(wave, game.map_index):
 		counts[g.t] = counts.get(g.t, 0) + g.n
 	var parts: Array[String] = []
 	for t in counts.keys():
@@ -234,6 +256,8 @@ func _wave_preview_text(wave: int) -> String:
 	return "Next: " + ", ".join(parts)
 
 func refresh() -> void:
+	var map_data: Dictionary = GameData.map_by_index(game.map_index)
+	_map_label.text = map_data.name
 	var next_wave: int = game.wave_index + 1
 	if game.wave_index >= GameData.WIN_WAVE:
 		_wave_label.text = "Wave %d (endless)" % game.wave_index
@@ -332,6 +356,13 @@ func show_end(victory: bool) -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title)
 
+	if victory:
+		var map_name := Label.new()
+		map_name.text = "%s cleared!" % GameData.map_by_index(game.map_index).name
+		map_name.add_theme_font_size_override("font_size", 22)
+		map_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(map_name)
+
 	var stats := Label.new()
 	stats.text = "Waves survived: %d\nKills: %d\nTowers built: %d" % [
 		game.wave_index if not victory else GameData.WIN_WAVE, game.kills, game.towers_built]
@@ -339,12 +370,49 @@ func show_end(victory: bool) -> void:
 	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(stats)
 
+	var cores_lbl := Label.new()
+	if game.last_core_gain > 0:
+		cores_lbl.text = "+%d Cores earned  (total: %d)" % [game.last_core_gain, Meta.cores]
+	else:
+		cores_lbl.text = "Cores: %d" % Meta.cores
+	cores_lbl.add_theme_font_size_override("font_size", 18)
+	cores_lbl.modulate = Color(0.55, 0.9, 1.0)
+	cores_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(cores_lbl)
+
 	if victory:
 		var cont := Button.new()
 		cont.text = "Continue (endless)"
 		cont.custom_minimum_size = Vector2(240, 50)
 		cont.pressed.connect(func() -> void: continue_pressed.emit())
 		col.add_child(cont)
+
+		if game.map_index + 1 < GameData.map_count() and SaveData.is_map_unlocked(game.map_index + 1):
+			var next_map := Button.new()
+			next_map.text = "Next Map: %s" % GameData.map_by_index(game.map_index + 1).name
+			next_map.custom_minimum_size = Vector2(240, 50)
+			next_map.pressed.connect(func() -> void:
+				GameData.selected_map_index = game.map_index + 1
+				restart_pressed.emit())
+			col.add_child(next_map)
+
+	var upgrades_btn := Button.new()
+	upgrades_btn.text = "Upgrades"
+	upgrades_btn.custom_minimum_size = Vector2(240, 50)
+	upgrades_btn.pressed.connect(func() -> void: upgrades_pressed.emit())
+	col.add_child(upgrades_btn)
+
+	var map_btn := Button.new()
+	map_btn.text = "Map Select"
+	map_btn.custom_minimum_size = Vector2(240, 50)
+	map_btn.pressed.connect(func() -> void: map_select_pressed.emit())
+	col.add_child(map_btn)
+
+	var menu_btn := Button.new()
+	menu_btn.text = "Main Menu"
+	menu_btn.custom_minimum_size = Vector2(240, 50)
+	menu_btn.pressed.connect(func() -> void: menu_pressed.emit())
+	col.add_child(menu_btn)
 
 	var restart := Button.new()
 	restart.text = "New Run"
