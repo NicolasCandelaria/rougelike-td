@@ -1,0 +1,8 @@
+.godot/
+*.tmp
+*.import
+*.translation
+/.mono/
+export.cfg
+build/
+web_export/

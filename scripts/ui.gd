@@ -1,0 +1,297 @@
+class_name GameUI
+extends CanvasLayer
+
+signal tower_selected(id: String)
+signal start_wave_pressed
+signal reward_chosen(index: int)
+signal restart_pressed
+signal continue_pressed
+signal sell_pressed
+
+var game: Node
+
+var _wave_label: Label
+var _enemy_label: Label
+var _gold_label: Label
+var _hp_bar: ProgressBar
+var _hp_label: Label
+var _tower_buttons := {}
+var _start_button: Button
+var _hint_label: Label
+var _reward_overlay: Control
+var _end_overlay: Control
+var _relic_label: Label
+var _preview_label: Label
+var _speed_button: Button
+var _mute_button: Button
+var _tower_panel: PanelContainer
+var _tower_panel_label: Label
+
+const BAR_Y := 640.0
+const BAR_H := 80.0
+
+func setup(game_ref: Node) -> void:
+	game = game_ref
+	_build_hud()
+	_build_bottom_bar()
+
+func _build_hud() -> void:
+	var top := PanelContainer.new()
+	top.position = Vector2(8, 8)
+	top.self_modulate = Color(1, 1, 1, 0.85)
+	add_child(top)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 24)
+	top.add_child(row)
+
+	_wave_label = _mk_label(row, "Wave 0 / %d" % GameData.WIN_WAVE)
+	_enemy_label = _mk_label(row, "Enemies: 0")
+	_gold_label = _mk_label(row, "Gold: 0")
+
+	var hp_box := HBoxContainer.new()
+	hp_box.add_theme_constant_override("separation", 8)
+	row.add_child(hp_box)
+	_mk_label(hp_box, "Base")
+	_hp_bar = ProgressBar.new()
+	_hp_bar.custom_minimum_size = Vector2(160, 22)
+	_hp_bar.show_percentage = false
+	hp_box.add_child(_hp_bar)
+	_hp_label = _mk_label(hp_box, "")
+
+	_relic_label = Label.new()
+	_relic_label.position = Vector2(8, 44)
+	_relic_label.add_theme_font_size_override("font_size", 13)
+	_relic_label.modulate = Color(1, 1, 0.75, 0.9)
+	add_child(_relic_label)
+
+	_build_tower_panel()
+
+func _build_bottom_bar() -> void:
+	var panel := PanelContainer.new()
+	panel.position = Vector2(0, BAR_Y)
+	panel.custom_minimum_size = Vector2(1280, BAR_H)
+	add_child(panel)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	panel.add_child(row)
+
+	for id in GameData.TOWERS.keys():
+		var d: Dictionary = GameData.TOWERS[id]
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(150, 64)
+		b.icon = load(d.gun_tex)
+		b.expand_icon = true
+		b.tooltip_text = d.desc
+		b.pressed.connect(func() -> void: tower_selected.emit(id))
+		row.add_child(b)
+		_tower_buttons[id] = b
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
+
+	_hint_label = _mk_label(row, "")
+	_hint_label.add_theme_font_size_override("font_size", 14)
+	_hint_label.modulate = Color(1, 1, 1, 0.7)
+
+	_preview_label = _mk_label(row, "")
+	_preview_label.add_theme_font_size_override("font_size", 14)
+
+	_mute_button = Button.new()
+	_mute_button.text = "Snd"
+	_mute_button.custom_minimum_size = Vector2(64, 64)
+	_mute_button.tooltip_text = "Toggle sound (M)"
+	_mute_button.pressed.connect(func() -> void:
+		game.sfx.set_muted(not game.sfx.muted)
+		refresh())
+	row.add_child(_mute_button)
+
+	_speed_button = Button.new()
+	_speed_button.text = "1x"
+	_speed_button.custom_minimum_size = Vector2(64, 64)
+	_speed_button.tooltip_text = "Game speed"
+	_speed_button.pressed.connect(_cycle_speed)
+	row.add_child(_speed_button)
+
+	_start_button = Button.new()
+	_start_button.text = "Start Wave"
+	_start_button.custom_minimum_size = Vector2(180, 64)
+	_start_button.tooltip_text = "Hotkey: Space"
+	_start_button.pressed.connect(func() -> void: start_wave_pressed.emit())
+	row.add_child(_start_button)
+
+func _mk_label(parent: Node, text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 18)
+	parent.add_child(l)
+	return l
+
+func _cycle_speed() -> void:
+	game.sfx.play("ui_click")
+	var next: float = {1.0: 2.0, 2.0: 3.0, 3.0: 1.0}[game.game_speed]
+	game.set_game_speed(next)
+	_speed_button.text = "%dx" % int(next)
+
+func _build_tower_panel() -> void:
+	_tower_panel = PanelContainer.new()
+	_tower_panel.position = Vector2(1020, 44)
+	_tower_panel.visible = false
+	add_child(_tower_panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	_tower_panel.add_child(col)
+	_tower_panel_label = Label.new()
+	_tower_panel_label.add_theme_font_size_override("font_size", 15)
+	col.add_child(_tower_panel_label)
+	var sell := Button.new()
+	sell.text = "Sell (70% refund)"
+	sell.pressed.connect(func() -> void: sell_pressed.emit())
+	col.add_child(sell)
+
+func show_tower_panel(t: Tower) -> void:
+	var d: Dictionary = GameData.TOWERS[t.type_id]
+	_tower_panel_label.text = "%s\nDamage: %.0f\nFire rate: %.1f/s\nRange: %.0f" % [
+		d.name, t.stat_damage(), t.stat_rate(), t.stat_range()]
+	_tower_panel.visible = true
+
+func hide_tower_panel() -> void:
+	_tower_panel.visible = false
+
+func _wave_preview_text(wave: int) -> String:
+	var counts := {}
+	for g in GameData.wave_groups(wave):
+		counts[g.t] = counts.get(g.t, 0) + g.n
+	var parts: Array[String] = []
+	for t in counts.keys():
+		parts.append("%d %s" % [counts[t], GameData.ENEMIES[t].name])
+	return "Next: " + ", ".join(parts)
+
+func refresh() -> void:
+	var next_wave: int = game.wave_index + 1
+	if game.wave_index >= GameData.WIN_WAVE:
+		_wave_label.text = "Wave %d (endless)" % game.wave_index
+	else:
+		_wave_label.text = "Wave %d / %d" % [game.wave_index, GameData.WIN_WAVE]
+	_enemy_label.text = "Enemies: %d" % game.enemies_remaining()
+	_gold_label.text = "Gold: %d" % game.currency
+	_hp_bar.max_value = game.base_hp_max
+	_hp_bar.value = game.base_hp
+	_hp_label.text = "%d / %d" % [game.base_hp, game.base_hp_max]
+
+	for id in _tower_buttons.keys():
+		var b: Button = _tower_buttons[id]
+		var unlocked: bool = id in game.unlocked_towers
+		var cost: int = game.tower_cost(id)
+		var d: Dictionary = GameData.TOWERS[id]
+		if unlocked:
+			b.text = "%s  $%d" % [d.name, cost]
+			b.disabled = game.currency < cost
+		else:
+			b.text = "%s  [locked]" % d.name
+			b.disabled = true
+
+	_start_button.disabled = game.state != game.State.BUILD
+	if game.state == game.State.WAVE:
+		_start_button.text = "Wave running..."
+		_preview_label.text = ""
+	else:
+		_start_button.text = "Start Wave %d" % next_wave
+		_preview_label.text = _wave_preview_text(next_wave)
+	_mute_button.text = "Mute" if game.sfx.muted else "Snd"
+	_relic_label.text = ("Relics: " + ", ".join(game.relics.map(
+		func(id: String) -> String: return GameData.RELICS[id].title))) if game.relics.size() > 0 else ""
+	_hint_label.text = "1-4 pick tower, click grass to place. Right-click cancels. Space starts." \
+		if game.state == game.State.BUILD or game.placing_type != "" else ""
+
+## ---------- Reward overlay ----------
+func show_rewards(cards: Array) -> void:
+	_reward_overlay = _dim_overlay()
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_reward_overlay.add_child(center)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 16)
+	center.add_child(col)
+
+	var title := Label.new()
+	title.text = "Wave %d cleared. Choose a reward:" % game.wave_index
+	title.add_theme_font_size_override("font_size", 26)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 20)
+	col.add_child(row)
+
+	for i in range(cards.size()):
+		var card: Dictionary = cards[i]
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(260, 160)
+		var tag: String = {tower = "[ TOWER ]", upgrade = "[ UPGRADE ]",
+			relic = "[ RELIC ]", gold = "[ GOLD ]"}[card.kind]
+		b.text = "%s\n%s\n\n%s" % [tag, card.title, card.desc]
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.clip_text = false
+		var idx := i
+		b.pressed.connect(func() -> void: reward_chosen.emit(idx))
+		row.add_child(b)
+
+func hide_rewards() -> void:
+	if is_instance_valid(_reward_overlay):
+		_reward_overlay.queue_free()
+	_reward_overlay = null
+
+## ---------- End screens ----------
+func show_end(victory: bool) -> void:
+	_end_overlay = _dim_overlay()
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_end_overlay.add_child(center)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 14)
+	center.add_child(col)
+
+	var title := Label.new()
+	title.text = "VICTORY" if victory else "BASE DESTROYED"
+	title.add_theme_font_size_override("font_size", 42)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+
+	var stats := Label.new()
+	stats.text = "Waves survived: %d\nKills: %d\nTowers built: %d" % [
+		game.wave_index if not victory else GameData.WIN_WAVE, game.kills, game.towers_built]
+	stats.add_theme_font_size_override("font_size", 20)
+	stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(stats)
+
+	if victory:
+		var cont := Button.new()
+		cont.text = "Continue (endless)"
+		cont.custom_minimum_size = Vector2(240, 50)
+		cont.pressed.connect(func() -> void: continue_pressed.emit())
+		col.add_child(cont)
+
+	var restart := Button.new()
+	restart.text = "New Run"
+	restart.custom_minimum_size = Vector2(240, 50)
+	restart.pressed.connect(func() -> void: restart_pressed.emit())
+	col.add_child(restart)
+
+func hide_end() -> void:
+	if is_instance_valid(_end_overlay):
+		_end_overlay.queue_free()
+	_end_overlay = null
+
+func _dim_overlay() -> Control:
+	var c := Control.new()
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	c.add_child(dim)
+	add_child(c)
+	return c

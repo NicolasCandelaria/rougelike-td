@@ -1,0 +1,67 @@
+name: Deploy Web to GitHub Pages
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install export templates
+        run: |
+          mkdir -p "$HOME/.local/share/godot/export_templates"
+          cp -r /root/.local/share/godot/export_templates/. "$HOME/.local/share/godot/export_templates/"
+
+      - name: Export Web (HTML5)
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/build"
+          cd "$GITHUB_WORKSPACE"
+          godot --headless --verbose --export-release "Web" "$GITHUB_WORKSPACE/build/index.html"
+          touch "$GITHUB_WORKSPACE/build/.nojekyll"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-web-build
+          path: build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download Web build
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-web-build
+          path: build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
